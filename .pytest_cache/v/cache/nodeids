@@ -1,0 +1,13 @@
+[
+  "tests/test_videos.py::TestVideoService::test_cache_consistency",
+  "tests/test_videos.py::TestVideoService::test_download_nonexistent_video",
+  "tests/test_videos.py::TestVideoService::test_get_status_after_upload",
+  "tests/test_videos.py::TestVideoService::test_get_status_empty",
+  "tests/test_videos.py::TestVideoService::test_get_status_without_auth",
+  "tests/test_videos.py::TestVideoService::test_health_check",
+  "tests/test_videos.py::TestVideoService::test_upload_unsupported_format",
+  "tests/test_videos.py::TestVideoService::test_upload_video_success",
+  "tests/test_videos.py::TestVideoService::test_upload_without_auth",
+  "tests/test_videos.py::TestVideoService::test_upload_zip_with_video",
+  "tests/test_videos.py::TestVideoService::test_upload_zip_without_video"
+]

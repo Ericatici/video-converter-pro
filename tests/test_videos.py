@@ -8,29 +8,36 @@ import zipfile
 import io
 import uuid
 
-# Direct imports will work after conftest.py sets up paths
-from app.main import app as auth_app  # From auth-service
-import sys
-from pathlib import Path
 
-# Import video service app
-video_service_path = Path(__file__).parent.parent / "video-service"
-sys.path.insert(0, str(video_service_path))
-from app.main import app as video_app  # From video-service
+@pytest.fixture(scope="module")
+def auth_app():
+    """Get auth service app"""
+    from app.main import app
+    return app
 
 
-@pytest.fixture(scope="function")
-def auth_client():
+@pytest.fixture(scope="module")
+def video_app():
+    """Get video service app"""
+    import sys
+    from pathlib import Path
+    video_path = Path(__file__).parent.parent / "video-service"
+    if str(video_path) not in sys.path:
+        sys.path.insert(0, str(video_path))
+    from app.main import app
+    return app
+
+
+@pytest.fixture
+def auth_client(auth_app):
     """Create test client for auth service"""
-    with TestClient(auth_app) as client:
-        yield client
+    return TestClient(auth_app)
 
 
-@pytest.fixture(scope="function")
-def video_client():
+@pytest.fixture
+def video_client(video_app):
     """Create test client for video service"""
-    with TestClient(video_app) as client:
-        yield client
+    return TestClient(video_app)
 
 
 @pytest.fixture
@@ -43,17 +50,20 @@ def auth_token(auth_client):
         "/auth/signup",
         json={"username": username, "password": "pass123"}
     )
-    assert signup_resp.status_code in [200, 400], f"Signup failed: {signup_resp.text}"
+    if signup_resp.status_code not in [200, 400]:
+        raise AssertionError(f"Signup failed with {signup_resp.status_code}: {signup_resp.text}")
     
     # Login to get token
     login_resp = auth_client.post(
         "/auth/login",
         json={"username": username, "password": "pass123"}
     )
-    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+    if login_resp.status_code != 200:
+        raise AssertionError(f"Login failed with {login_resp.status_code}: {login_resp.text}")
     
     data = login_resp.json()
-    assert "access_token" in data, f"No access_token in response: {data}"
+    if "access_token" not in data:
+        raise AssertionError(f"No access_token in response: {data}")
     return data["access_token"]
 
 
