@@ -1,13 +1,15 @@
 """
 Integration tests for Auth Service (microservice)
-Tests the auth-service endpoints via HTTP calls
-Requires auth-service running on http://localhost:8001
+Tests the auth-service endpoints using FastAPI TestClient
 """
 import pytest
-import httpx
 import uuid
+import sys
+from pathlib import Path
+from fastapi.testclient import TestClient
 
-AUTH_SERVICE_URL = "http://localhost:8001"
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def unique_username():
@@ -15,10 +17,24 @@ def unique_username():
     return f"user_{uuid.uuid4().hex[:8]}"
 
 
+@pytest.fixture(scope="module")
+def auth_app():
+    """Load the auth-service app"""
+    # Change to auth-service directory
+    auth_service_dir = Path(__file__).parent.parent / "auth-service"
+    sys.path.insert(0, str(auth_service_dir))
+    
+    from app.main import app
+    return app
+
+
 @pytest.fixture
-def client():
-    """Create HTTP client for auth service"""
-    return httpx.Client(base_url=AUTH_SERVICE_URL, timeout=10.0)
+def client(auth_app):
+    """
+    TestClient fixture for in-memory testing.
+    No need to run auth-service separately.
+    """
+    return TestClient(auth_app)
 
 
 class TestAuthService:

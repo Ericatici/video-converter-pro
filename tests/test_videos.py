@@ -7,25 +7,66 @@ from fastapi.testclient import TestClient
 import zipfile
 import io
 import uuid
+import sys
+from pathlib import Path
+
+# Cache for auth modules to restore after loading video app
+_auth_modules_cache = {}
 
 
 @pytest.fixture(scope="module")
 def auth_app():
-    """Get auth service app"""
-    from app.main import app
-    return app
+    """Get auth service app - loaded first"""
+    global _auth_modules_cache
+    
+    auth_path = Path(__file__).parent.parent / "auth-service"
+    sys.path.insert(0, str(auth_path))
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    
+    # Import auth app
+    from app import main as auth_main
+    auth_application = auth_main.app
+    
+    # Cache auth modules for later restoration
+    _auth_modules_cache = {
+        'app': sys.modules.get('app'),
+        'app.main': sys.modules.get('app.main'),
+        'app.routes': sys.modules.get('app.routes'),
+    }
+    
+    return auth_application
 
 
-@pytest.fixture(scope="module")
-def video_app():
-    """Get video service app"""
-    import sys
-    from pathlib import Path
-    video_path = Path(__file__).parent.parent / "video-service"
-    if str(video_path) not in sys.path:
-        sys.path.insert(0, str(video_path))
-    from app.main import app
-    return app
+@pytest.fixture(scope="module") 
+def video_app(auth_app):
+    """Get video service app - loaded after auth with proper isolation"""
+    global _auth_modules_cache
+    
+    # Remove auth-service app modules to load video-service
+    for key in list(sys.modules.keys()):
+        if key.startswith('app.') or key == 'app':
+            del sys.modules[key]
+    
+    # Add video-service to path
+    video_path = Path(__file__).parent.parent / "video-service"  
+    sys.path.insert(0, str(video_path))
+    
+    # Import video app
+    from app import main as video_main
+    video_application = video_main.app
+    
+    # Store video modules
+    video_modules = {
+        'app': sys.modules.get('app'),
+        'app.main': sys.modules.get('app.main'),
+    }
+    
+    # Restore auth modules so auth_client fixture works
+    for key, module in _auth_modules_cache.items():
+        if module is not None:
+            sys.modules[key] = module
+    
+    return video_application
 
 
 @pytest.fixture
@@ -81,7 +122,7 @@ class TestVideoService:
         
         # Create a fake video file
         video_content = b"fake mp4 video content here"
-        files = {"file": ("test.mp4", video_content, "video/mp4")}
+        files = [("files", ("test.mp4", video_content, "video/mp4"))]
         
         response = video_client.post(
             "/videos/upload",
@@ -91,13 +132,15 @@ class TestVideoService:
         
         assert response.status_code == 200
         data = response.json()
-        assert "video_id" in data
-        assert data["status"] == "queued"
+        assert data["uploaded"] == 1
+        assert len(data["videos"]) == 1
+        assert "video_id" in data["videos"][0]
+        assert data["videos"][0]["status"] == "queued"
     
     def test_upload_without_auth(self, video_client):
         """Test upload without authentication token"""
         video_content = b"fake mp4 video content"
-        files = {"file": ("test.mp4", video_content, "video/mp4")}
+        files = [("files", ("test.mp4", video_content, "video/mp4"))]
         
         response = video_client.post(
             "/videos/upload",
@@ -111,7 +154,7 @@ class TestVideoService:
         headers = {"Authorization": f"Bearer {auth_token}"}
         
         # Unsupported format: .txt
-        files = {"file": ("test.txt", b"not a video", "text/plain")}
+        files = [("files", ("test.txt", b"not a video", "text/plain"))]
         
         response = video_client.post(
             "/videos/upload",
@@ -120,7 +163,7 @@ class TestVideoService:
         )
         
         assert response.status_code == 400
-        assert "Unsupported" in response.json().get("detail", "")
+        assert "No valid video files" in response.json().get("detail", "")
     
     def test_get_status_empty(self, video_client, auth_client):
         """Test getting status with no videos"""
@@ -151,7 +194,7 @@ class TestVideoService:
         
         # Upload video
         video_content = b"fake mp4 video content"
-        files = {"file": ("test.mp4", video_content, "video/mp4")}
+        files = [("files", ("test.mp4", video_content, "video/mp4"))]
         
         upload_response = video_client.post(
             "/videos/upload",
@@ -159,7 +202,7 @@ class TestVideoService:
             headers=headers
         )
         
-        video_id = upload_response.json()["video_id"]
+        video_id = upload_response.json()["videos"][0]["video_id"]
         
         # Get status
         status_response = video_client.get(
@@ -198,17 +241,19 @@ class TestVideoService:
             zf.writestr("video.mp4", b"fake mp4 content")
         
         zip_buffer.seek(0)
-        files = {"file": ("video.zip", zip_buffer.read(), "application/zip")}
+        files = [("files", ("video.zip", zip_buffer.read(), "application/zip"))]
         
         response = video_client.post(
             "/videos/upload",
-            files={"file": files["file"]},
+            files=files,
             headers=headers
         )
         
         assert response.status_code == 200
         data = response.json()
-        assert "video_id" in data
+        assert data["uploaded"] == 1
+        assert len(data["videos"]) == 1
+        assert "video_id" in data["videos"][0]
     
     def test_upload_zip_without_video(self, video_client, auth_token):
         """Test uploading a ZIP without video file"""
@@ -220,11 +265,11 @@ class TestVideoService:
             zf.writestr("text.txt", b"just text")
         
         zip_buffer.seek(0)
-        files = {"file": ("no_video.zip", zip_buffer.read(), "application/zip")}
+        files = [("files", ("no_video.zip", zip_buffer.read(), "application/zip"))]
         
         response = video_client.post(
             "/videos/upload",
-            files={"file": files["file"]},
+            files=files,
             headers=headers
         )
         
