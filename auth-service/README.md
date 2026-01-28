@@ -3,7 +3,7 @@
 Authentication microservice for the Video Converter platform.
 
 ## Overview
-Build status: Testing Docker push permissions
+Build status: Docker permissions - Testing with GitHub repo settings update
 
 This service handles user registration, login, token verification, and authentication for the video processing pipeline.
 
