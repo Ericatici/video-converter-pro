@@ -5,11 +5,13 @@ on:
     paths:
       - 'video-service/**'
       - 'shared/**'
+      - 'tests/**'
       - '.github/workflows/video-service-ci.yml'
   pull_request:
     paths:
       - 'video-service/**'
       - 'shared/**'
+      - 'tests/**'
       - '.github/workflows/video-service-ci.yml'
 
 jobs:
