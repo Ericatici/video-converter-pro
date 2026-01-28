@@ -109,14 +109,10 @@ def auth_token(auth_client):
     if login_resp.status_code != 200:
         raise AssertionError(f"Login failed with {login_resp.status_code}: {login_resp.text}")
     
-<<<<<<< HEAD
-    return login_resp.json()["access_token"]
-=======
     data = login_resp.json()
     if "access_token" not in data:
         raise AssertionError(f"No access_token in response: {data}")
     return data["access_token"]
->>>>>>> origin/main
 
 
 class TestVideoService:
