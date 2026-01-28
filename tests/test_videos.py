@@ -1,44 +1,60 @@
 """
 Integration tests for Video Service (microservice)
-Tests the video-service endpoints via HTTP calls
-Requires auth-service on http://localhost:8001 and video-service on http://localhost:8002
+Tests the video-service endpoints using FastAPI TestClient
 """
 import pytest
-import httpx
+from fastapi.testclient import TestClient
 import zipfile
 import io
 import uuid
 
-AUTH_SERVICE_URL = "http://localhost:8001"
-VIDEO_SERVICE_URL = "http://localhost:8002"
+# Direct imports will work after conftest.py sets up paths
+from app.main import app as auth_app  # From auth-service
+import sys
+from pathlib import Path
+
+# Import video service app
+video_service_path = Path(__file__).parent.parent / "video-service"
+sys.path.insert(0, str(video_service_path))
+from app.main import app as video_app  # From video-service
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def auth_client():
-    """Create HTTP client for auth service"""
-    return httpx.Client(base_url=AUTH_SERVICE_URL, timeout=10.0)
+    """Create test client for auth service"""
+    with TestClient(auth_app) as client:
+        yield client
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def video_client():
-    """Create HTTP client for video service"""
-    return httpx.Client(base_url=VIDEO_SERVICE_URL, timeout=10.0)
+    """Create test client for video service"""
+    with TestClient(video_app) as client:
+        yield client
 
 
 @pytest.fixture
 def auth_token(auth_client):
     """Create a test user and return auth token"""
+    username = f"testuser_{uuid.uuid4().hex[:8]}"
+    
     # Signup
-    auth_client.post(
+    signup_resp = auth_client.post(
         "/auth/signup",
-        json={"username": "videotest", "password": "pass123"}
+        json={"username": username, "password": "pass123"}
     )
+    assert signup_resp.status_code in [200, 400], f"Signup failed: {signup_resp.text}"
+    
     # Login to get token
-    response = auth_client.post(
+    login_resp = auth_client.post(
         "/auth/login",
-        json={"username": "videotest", "password": "pass123"}
+        json={"username": username, "password": "pass123"}
     )
-    return response.json()["access_token"]
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+    
+    data = login_resp.json()
+    assert "access_token" in data, f"No access_token in response: {data}"
+    return data["access_token"]
 
 
 class TestVideoService:
