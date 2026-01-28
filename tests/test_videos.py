@@ -109,7 +109,14 @@ def auth_token(auth_client):
     if login_resp.status_code != 200:
         raise AssertionError(f"Login failed with {login_resp.status_code}: {login_resp.text}")
     
+<<<<<<< HEAD
     return login_resp.json()["access_token"]
+=======
+    data = login_resp.json()
+    if "access_token" not in data:
+        raise AssertionError(f"No access_token in response: {data}")
+    return data["access_token"]
+>>>>>>> origin/main
 
 
 class TestVideoService:
@@ -136,8 +143,10 @@ class TestVideoService:
         
         assert response.status_code == 200
         data = response.json()
-        assert "video_id" in data
-        assert data["status"] == "queued"
+        assert data["uploaded"] == 1
+        assert len(data["videos"]) == 1
+        assert "video_id" in data["videos"][0]
+        assert data["videos"][0]["status"] == "queued"
     
     def test_upload_without_auth(self, video_client):
         """Test upload without authentication token"""
@@ -165,7 +174,7 @@ class TestVideoService:
         )
         
         assert response.status_code == 400
-        assert "Unsupported" in response.json().get("detail", "")
+        assert "No valid video files" in response.json().get("detail", "")
     
     def test_get_status_empty(self, video_client, auth_client):
         """Test getting status with no videos"""
@@ -204,7 +213,7 @@ class TestVideoService:
             headers=headers
         )
         
-        video_id = upload_response.json()["video_id"]
+        video_id = upload_response.json()["videos"][0]["video_id"]
         
         # Get status
         status_response = video_client.get(
@@ -253,7 +262,9 @@ class TestVideoService:
         
         assert response.status_code == 200
         data = response.json()
-        assert "video_id" in data
+        assert data["uploaded"] == 1
+        assert len(data["videos"]) == 1
+        assert "video_id" in data["videos"][0]
     
     def test_upload_zip_without_video(self, video_client, auth_token):
         """Test uploading a ZIP without video file"""

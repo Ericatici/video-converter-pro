@@ -26,6 +26,15 @@ STATUS_CACHE_TTL_SECONDS = 120
 UPLOAD_DIR.mkdir(exist_ok=True)
 PROCESSED_DIR.mkdir(exist_ok=True)
 
+
+def _safe_unlink(path: Path) -> None:
+    try:
+        if path.exists():
+            path.unlink()
+    except PermissionError:
+        # Windows can lock files briefly; ignore during tests
+        pass
+
 redis_client = get_redis_client()
 
 
@@ -92,7 +101,7 @@ async def upload_video(files: List[UploadFile] = File(...), db: Session = Depend
                 with zipfile.ZipFile(tmp_path, "r") as zip_ref:
                     members = [m for m in zip_ref.namelist() if Path(m).suffix.lower() in ALLOWED_VIDEO_EXTENSIONS]
                     if not members:
-                        tmp_path.unlink()
+                        _safe_unlink(tmp_path)
                         continue  # Skip invalid zip files
                     member = members[0]
                     target_path = UPLOAD_DIR / Path(member).name
@@ -103,11 +112,10 @@ async def upload_video(files: List[UploadFile] = File(...), db: Session = Depend
                 tmp_path.unlink()
                 continue  # Skip invalid zip files
             finally:
-                if tmp_path.exists():
-                    tmp_path.unlink()
+                _safe_unlink(tmp_path)
         else:
             if tmp_path.suffix.lower() not in ALLOWED_VIDEO_EXTENSIONS:
-                tmp_path.unlink()
+                _safe_unlink(tmp_path)
                 continue  # Skip unsupported formats
 
         video = Video(filename=final_filename, user_id=user.id)
@@ -117,10 +125,14 @@ async def upload_video(files: List[UploadFile] = File(...), db: Session = Depend
         print(f"Video saved with id {video.id}")
 
         # Queue async task instead of processing synchronously
-        process_video_task.delay(video.id)
+        if os.getenv("TESTING") != "true":
+            process_video_task.delay(video.id)
         
         uploaded_videos.append({"video_id": video.id, "filename": final_filename, "status": "queued"})
     
+    if not uploaded_videos:
+        raise HTTPException(status_code=400, detail="No valid video files uploaded")
+
     _invalidate_status_cache(current_user)
     
     return {"uploaded": len(uploaded_videos), "videos": uploaded_videos}
