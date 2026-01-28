@@ -124,11 +124,13 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install -r video-service/requirements.txt
+          pip install -r shared/requirements.txt || true
       
       - name: Run video tests
         env:
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          DATABASE_URL: sqlite:////tmp/test.db
           RABBITMQ_URL: amqp://guest:guest@localhost:5672/
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: test-secret-key
+          TESTING: true
         run: pytest tests/test_videos.py -v
