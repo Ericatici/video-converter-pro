@@ -4,6 +4,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Shared configuration for all microservices
+# All configuration is validated and loaded from environment variables
+
 class Settings(BaseSettings):
     model_config = ConfigDict(
         extra='ignore',  # Allow extra fields from .env
