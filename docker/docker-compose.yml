@@ -1,0 +1,268 @@
+version: '3.8'
+
+networks:
+  microservices:
+    driver: bridge
+
+services:
+  # Database
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: videoconverter
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - microservices
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Message Broker
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - microservices
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for caching/sessions)
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    networks:
+      - microservices
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MailHog - SMTP Test Server
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - microservices
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ..
+      dockerfile: auth-service/Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/videoconverter
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-secret-key-change-in-production
+      - WEBHOOK_URL=http://host.docker.internal:3001/webhook
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - microservices
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Video Service API
+  video-service:
+    build:
+      context: ..
+      dockerfile: video-service/Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/videoconverter
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-secret-key-change-in-production
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - WEBHOOK_URL=http://host.docker.internal:3001/webhook
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+      - ./processed:/app/processed
+    networks:
+      - microservices
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Video Processing Worker (Celery)
+  video-worker:
+    build:
+      context: ..
+      dockerfile: video-service/Dockerfile.worker
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/videoconverter
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-secret-key-change-in-production
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - WEBHOOK_URL=http://host.docker.internal:3001/webhook
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+      - ./processed:/app/processed
+    networks:
+      - microservices
+
+  # Notification Service (Event Consumer)
+  notification-service:
+    build:
+      context: ..
+      dockerfile: notification-service/Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/videoconverter
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-secret-key-change-in-production
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - WEBHOOK_URL=http://host.docker.internal:3001/webhook
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - microservices
+
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    depends_on:
+      - auth-service
+      - video-service
+      - notification-service
+      - postgres-exporter
+      - redis-exporter
+      - rabbitmq-exporter
+    networks:
+      - microservices
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Exporter
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    ports:
+      - "9187:9187"
+    environment:
+      DATA_SOURCE_NAME: "postgresql://user:password@db:5432/videoconverter?sslmode=disable"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - microservices
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9187"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    ports:
+      - "9121:9121"
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - microservices
+
+  # RabbitMQ Exporter
+  rabbitmq-exporter:
+    image: kbudde/rabbitmq-exporter:latest
+    ports:
+      - "9419:9419"
+    environment:
+      RABBIT_URL: "http://rabbitmq:15672"
+      RABBIT_USER: "guest"
+      RABBIT_PASSWORD: "guest"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - microservices
+
+  # Grafana - Dashboards & Visualization
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - TZ=America/Sao_Paulo
+      - GF_DEFAULT_TIMEZONE=browser
+    depends_on:
+      - prometheus
+    networks:
+      - microservices
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:

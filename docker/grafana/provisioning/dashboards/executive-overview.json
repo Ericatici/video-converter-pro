@@ -1,0 +1,255 @@
+{
+    "id":  null,
+    "uid":  "exec-overview",
+    "title":  "Executive Overview",
+    "tags":  [
+                 "overview",
+                 "executive"
+             ],
+    "timezone":  "UTC",
+    "schemaVersion":  27,
+    "version":  1,
+    "refresh":  "30s",
+    "time":  {
+                 "from":  "now-6h",
+                 "to":  "now"
+             },
+    "timepicker":  {},
+    "description":  "High-level system health",
+    "panels":  [
+                   {
+                       "id":  1,
+                       "type":  "stat",
+                       "title":  "Services Up",
+                       "gridPos":  {
+                                       "h":  4,
+                                       "w":  6,
+                                       "x":  0,
+                                       "y":  0
+                                   },
+                       "targets":  [
+                                       {
+                                           "refId":  "A",
+                                           "expr":  "count(up == 1)"
+                                       }
+                                   ],
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "none",
+                                       "orientation":  "auto"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "mappings":  [
+                                                                              {
+                                                                                  "type":  "value",
+                                                                                  "options":  {
+                                                                                                  "1":  {
+                                                                                                           "text":  "UP",
+                                                                                                           "color":  "green"
+                                                                                                       }
+                                                                                              }
+                                                                              }
+                                                                          ],
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                              {
+                                                                                                  "color":  "red",
+                                                                                                  "value":  null
+                                                                                              },
+                                                                                              {
+                                                                                                  "color":  "green",
+                                                                                                  "value":  1
+                                                                                              }
+                                                                                          ]
+                                                                           }
+                                                        }
+                                       }
+                   },
+                   {
+                       "id":  2,
+                       "type":  "stat",
+                       "title":  "Total Requests (5m)",
+                       "gridPos":  {
+                                       "h":  4,
+                                       "w":  6,
+                                       "x":  6,
+                                       "y":  0
+                                   },
+                       "targets":  [
+                                       {
+                                           "refId":  "A",
+                                           "expr":  "sum(rate(http_requests_total[5m]))"
+                                       }
+                                   ],
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "none",
+                                       "orientation":  "auto"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "reqps",
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                              {
+                                                                                                  "color":  "blue",
+                                                                                                  "value":  null
+                                                                                              }
+                                                                                          ]
+                                                                           }
+                                                        }
+                                       }
+                   },
+                   {
+                       "id":  3,
+                       "type":  "stat",
+                       "title":  "Error Rate (5m)",
+                       "gridPos":  {
+                                       "h":  4,
+                                       "w":  6,
+                                       "x":  12,
+                                       "y":  0
+                                   },
+                       "targets":  [
+                                       {
+                                           "refId":  "A",
+                                           "expr":  "sum(rate(http_requests_total{status=~\"5..\"}[5m]))"
+                                       }
+                                   ],
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "none",
+                                       "orientation":  "auto"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "percent",
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                              {
+                                                                                                  "color":  "green",
+                                                                                                  "value":  null
+                                                                                              },
+                                                                                              {
+                                                                                                  "color":  "orange",
+                                                                                                  "value":  0.5
+                                                                                              },
+                                                                                              {
+                                                                                                  "color":  "red",
+                                                                                                  "value":  1
+                                                                                              }
+                                                                                          ]
+                                                                           }
+                                                        }
+                                       }
+                   },
+                   {
+                       "id":  4,
+                       "type":  "stat",
+                       "title":  "Active Workers",
+                       "gridPos":  {
+                                       "h":  4,
+                                       "w":  6,
+                                       "x":  18,
+                                       "y":  0
+                                   },
+                       "targets":  [
+                                       {
+                                           "refId":  "A",
+                                           "expr":  "count(celery_worker_alive{state=\"online\"})"
+                                       }
+                                   ],
+                       "options":  {
+                                       "textMode":  "auto",
+                                       "colorMode":  "background",
+                                       "graphMode":  "none",
+                                       "orientation":  "auto"
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "color":  {
+                                                                          "mode":  "thresholds"
+                                                                      },
+                                                            "mappings":  [
+                                                                              {
+                                                                                  "type":  "value",
+                                                                                  "options":  {
+                                                                                                  "0":  {
+                                                                                                           "text":  "DOWN",
+                                                                                                           "color":  "red"
+                                                                                                       }
+                                                                                              }
+                                                                              }
+                                                                          ],
+                                                            "thresholds":  {
+                                                                               "mode":  "absolute",
+                                                                               "steps":  [
+                                                                                              {
+                                                                                                  "color":  "red",
+                                                                                                  "value":  null
+                                                                                              },
+                                                                                              {
+                                                                                                  "color":  "green",
+                                                                                                  "value":  1
+                                                                                              }
+                                                                                          ]
+                                                                           }
+                                                        }
+                                       }
+                   },
+                   {
+                       "id":  5,
+                       "type":  "timeseries",
+                       "title":  "Request Rate Over Time",
+                       "gridPos":  {
+                                       "h":  8,
+                                       "w":  24,
+                                       "x":  0,
+                                       "y":  4
+                                   },
+                       "targets":  [
+                                       {
+                                           "refId":  "A",
+                                           "expr":  "sum(rate(http_requests_total[5m]))",
+                                           "legendFormat":  "Total Requests/sec"
+                                       }
+                                   ],
+                       "options":  {
+                                       "legend":  {
+                                           "calcs":  [],
+                                           "displayMode":  "list",
+                                           "placement":  "bottom"
+                                       },
+                                       "tooltip":  {
+                                           "mode":  "multi"
+                                       }
+                                   },
+                       "fieldConfig":  {
+                                           "defaults":  {
+                                                            "unit":  "reqps",
+                                                            "custom":  {
+                                                                           "drawStyle":  "line",
+                                                                           "fillOpacity":  10,
+                                                                           "lineInterpolation":  "linear"
+                                                                       }
+                                                        }
+                                       }
+                   }
+               ]
+}

@@ -1,0 +1,21 @@
+# Docker Compose override for using pre-built images from GitHub Container Registry
+# Usage: docker-compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  auth-service:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/video-converter-auth:latest
+    build: null
+
+  video-service:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/video-converter-video:latest
+    build: null
+
+  video-worker:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/video-converter-worker:latest
+    build: null
+
+  notification-service:
+    image: ghcr.io/YOUR_GITHUB_USERNAME/video-converter-notification:latest
+    build: null

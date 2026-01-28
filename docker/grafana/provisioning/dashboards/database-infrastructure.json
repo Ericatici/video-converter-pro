@@ -1,0 +1,173 @@
+{
+  "panels": [
+    {
+      "gridPos": { "y": 0, "x": 0, "w": 6, "h": 4 },
+      "title": "Postgres Status",
+      "type": "stat",
+      "targets": [ { "refId": "A", "expr": "up{job=\"postgres\"}" } ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red" },
+                "1": { "text": "UP", "color": "green" }
+              }
+            }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null } ] }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 0, "x": 6, "w": 6, "h": 4 },
+      "title": "Redis Status",
+      "type": "stat",
+      "targets": [ { "refId": "A", "expr": "up{job=\"redis\"}" } ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red" },
+                "1": { "text": "UP", "color": "green" }
+              }
+            }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null } ] }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 0, "x": 12, "w": 6, "h": 4 },
+      "title": "RabbitMQ Status",
+      "type": "stat",
+      "targets": [ { "refId": "A", "expr": "up{job=\"rabbitmq\"}" } ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red" },
+                "1": { "text": "UP", "color": "green" }
+              }
+            }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null } ] }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 0, "x": 18, "w": 6, "h": 4 },
+      "title": "Prometheus Status",
+      "type": "stat",
+      "targets": [ { "refId": "A", "expr": "up{job=\"prometheus\"}" } ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "DOWN", "color": "red" },
+                "1": { "text": "UP", "color": "green" }
+              }
+            }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null } ] }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 4, "x": 0, "w": 12, "h": 8 },
+      "title": "Conexões Postgres",
+      "type": "timeseries",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "pg_stat_database_numbackends{datname=\"videoconverter\"}",
+          "legendFormat": "Conexões ativas"
+        },
+        {
+          "refId": "B",
+          "expr": "pg_settings_max_connections",
+          "legendFormat": "Max connections"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "showPoints": "auto", "fillOpacity": 8 }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 4, "x": 12, "w": 12, "h": 8 },
+      "title": "TPS Postgres (commits + rollbacks)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(pg_stat_database_xact_commit{datname=\"videoconverter\"}[5m])",
+          "legendFormat": "Commits/s"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(pg_stat_database_xact_rollback{datname=\"videoconverter\"}[5m])",
+          "legendFormat": "Rollbacks/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "drawStyle": "line", "showPoints": "auto", "fillOpacity": 8 }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 12, "x": 0, "w": 12, "h": 8 },
+      "title": "Mensagens RabbitMQ (fila celery)",
+      "type": "timeseries",
+      "targets": [
+        { "refId": "A", "expr": "rabbitmq_queue_messages_ready{queue=\"celery\"}", "legendFormat": "Prontas" },
+        { "refId": "B", "expr": "rabbitmq_queue_messages_unacked{queue=\"celery\"}", "legendFormat": "Em processamento" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "showPoints": "auto", "fillOpacity": 8 }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 12, "x": 12, "w": 12, "h": 8 },
+      "title": "Redis Memória",
+      "type": "timeseries",
+      "targets": [
+        { "refId": "A", "expr": "redis_memory_used_bytes", "legendFormat": "Usada" },
+        { "refId": "B", "expr": "redis_memory_max_bytes", "legendFormat": "Máxima" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": { "drawStyle": "line", "showPoints": "auto", "fillOpacity": 8 }
+        }
+      }
+    }
+  ],
+  "description": "Monitoring dashboard for database-infrastructure",
+  "editable": false,
+  "version": 3000,
+  "iteration": 1738000000,
+  "tags": ["database"],
+  "uid": "database-infrastructure",
+  "timezone": "browser",
+  "refresh": "30s",
+  "id": null,
+  "title": "Database & Infrastructure",
+  "schemaVersion": 27,
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {}
+}

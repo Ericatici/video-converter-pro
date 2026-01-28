@@ -1,0 +1,118 @@
+{
+    "panels": [
+        {
+            "gridPos": { "y": 0, "x": 0, "w": 6, "h": 4 },
+            "title": "Workers Ativos",
+            "type": "stat",
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "sum(rabbitmq_queue_consumers{queue=\"celery\"})"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "none",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "red", "value": null },
+                            { "color": "orange", "value": 1 },
+                            { "color": "green", "value": 2 }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "gridPos": { "y": 0, "x": 6, "w": 6, "h": 4 },
+            "title": "Mensagens na Fila (prontas)",
+            "type": "stat",
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "rabbitmq_queue_messages_ready{queue=\"celery\"}"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            { "color": "green", "value": null },
+                            { "color": "orange", "value": 10 },
+                            { "color": "red", "value": 50 }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "gridPos": { "y": 0, "x": 12, "w": 12, "h": 8 },
+            "title": "Throughput da Fila (5m)",
+            "type": "timeseries",
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "rate(rabbitmq_queue_messages_published_total{queue=\"celery\"}[5m])",
+                    "legendFormat": "Publicadas"
+                },
+                {
+                    "refId": "B",
+                    "expr": "rate(rabbitmq_queue_messages_delivered_total{queue=\"celery\"}[5m])",
+                    "legendFormat": "Consumidas"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "reqps",
+                    "custom": {
+                        "drawStyle": "line",
+                        "showPoints": "auto",
+                        "fillOpacity": 10
+                    }
+                }
+            }
+        },
+        {
+            "gridPos": { "y": 8, "x": 0, "w": 12, "h": 8 },
+            "title": "Profundidade da Fila", 
+            "type": "timeseries",
+            "targets": [
+                {
+                    "refId": "A",
+                    "expr": "rabbitmq_queue_messages_ready{queue=\"celery\"}",
+                    "legendFormat": "Prontas"
+                },
+                {
+                    "refId": "B",
+                    "expr": "rabbitmq_queue_messages_unacked{queue=\"celery\"}",
+                    "legendFormat": "Em processamento"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "custom": {
+                        "drawStyle": "line",
+                        "showPoints": "auto",
+                        "fillOpacity": 8
+                    }
+                }
+            }
+        }
+    ],
+    "description": "Monitoring dashboard for celery-workers",
+    "version": 2,
+    "iteration": 1737996000,
+    "tags": ["celery"],
+    "uid": "celery-workers",
+    "timezone": "browser",
+    "refresh": "30s",
+    "id": null,
+    "title": "Celery Workers",
+    "schemaVersion": 27,
+    "time": { "from": "now-6h", "to": "now" },
+    "timepicker": {}
+}

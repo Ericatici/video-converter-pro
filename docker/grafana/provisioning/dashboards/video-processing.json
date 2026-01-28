@@ -1,0 +1,166 @@
+{
+  "panels": [
+    {
+      "gridPos": { "y": 0, "x": 0, "w": 12, "h": 4 },
+      "title": "Mensagens Publicadas (total)",
+      "type": "stat",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rabbitmq_queue_messages_published_total{queue=\"celery\"}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "blue", "value": 10 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 0, "x": 12, "w": 12, "h": 4 },
+      "title": "Mensagens Entregues (total)",
+      "type": "stat",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rabbitmq_queue_messages_delivered_total{queue=\"celery\"}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "blue", "value": 10 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 4, "x": 0, "w": 12, "h": 8 },
+      "title": "Throughput da Fila (publicadas vs. consumidas)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(rabbitmq_queue_messages_published_total{queue=\"celery\"}[5m])",
+          "legendFormat": "Publicadas/s"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(rabbitmq_queue_messages_delivered_total{queue=\"celery\"}[5m])",
+          "legendFormat": "Consumidas/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "auto",
+            "fillOpacity": 10
+          }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 4, "x": 12, "w": 12, "h": 8 },
+      "title": "Profundidade da Fila (prontas vs. em processamento)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rabbitmq_queue_messages_ready{queue=\"celery\"}",
+          "legendFormat": "Prontas"
+        },
+        {
+          "refId": "B",
+          "expr": "rabbitmq_queue_messages_unacked{queue=\"celery\"}",
+          "legendFormat": "Em processamento"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "auto",
+            "fillOpacity": 8
+          }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 12, "x": 0, "w": 12, "h": 8 },
+      "title": "Workers Ativos (consumidores)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rabbitmq_queue_consumers{queue=\"celery\"}",
+          "legendFormat": "Workers"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "auto",
+            "fillOpacity": 8
+          }
+        }
+      }
+    },
+    {
+      "gridPos": { "y": 12, "x": 12, "w": 12, "h": 8 },
+      "title": "Taxa de Ack vs. Redelivery",
+      "type": "timeseries",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(rabbitmq_queue_messages_ack_total{queue=\"celery\"}[5m])",
+          "legendFormat": "Acks/s (sucesso)"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(rabbitmq_queue_messages_redelivered_total{queue=\"celery\"}[5m])",
+          "legendFormat": "Redelivery/s (retry)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "showPoints": "auto",
+            "fillOpacity": 8
+          }
+        }
+      }
+    }
+  ],
+  "description": "Monitoring dashboard for video-processing via RabbitMQ metrics",
+  "version": 2000,
+  "tags": ["video", "celery"],
+  "uid": "video-processing",
+  "timezone": "browser",
+  "refresh": "30s",
+  "id": null,
+  "title": "Video Processing",
+  "schemaVersion": 27,
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {}
+}
