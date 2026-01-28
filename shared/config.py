@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,7 +11,6 @@ class Settings(BaseSettings):
     webhook_url: str = "http://localhost:3001/webhook"  # Webhook endpoint for notifications
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
 
-    class Config:
-        env_file = ".env"
+    model_config = ConfigDict(extra='ignore')
 
 settings = Settings()

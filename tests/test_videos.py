@@ -1,44 +1,115 @@
 """
 Integration tests for Video Service (microservice)
-Tests the video-service endpoints via HTTP calls
-Requires auth-service on http://localhost:8001 and video-service on http://localhost:8002
+Tests the video-service endpoints using FastAPI TestClient
 """
 import pytest
-import httpx
+from fastapi.testclient import TestClient
 import zipfile
 import io
 import uuid
+import sys
+import os
+from pathlib import Path
 
-AUTH_SERVICE_URL = "http://localhost:8001"
-VIDEO_SERVICE_URL = "http://localhost:8002"
+# Set up test environment BEFORE importing apps
+os.environ["TESTING"] = "true"
+os.environ["DATABASE_URL"] = "sqlite:///test_video.db"
+os.environ["REDIS_URL"] = "redis://localhost:6379"
+os.environ["SECRET_KEY"] = "test-secret-key"
+
+# Cache for auth modules to restore after loading video app
+_auth_modules_cache = {}
+
+
+@pytest.fixture(scope="module")
+def auth_app():
+    """Get auth service app - loaded first"""
+    global _auth_modules_cache
+    
+    auth_path = Path(__file__).parent.parent / "auth-service"
+    sys.path.insert(0, str(auth_path))
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    
+    # Import auth app
+    from app import main as auth_main
+    auth_application = auth_main.app
+    
+    # Cache auth modules for later restoration
+    _auth_modules_cache = {
+        'app': sys.modules.get('app'),
+        'app.main': sys.modules.get('app.main'),
+        'app.routes': sys.modules.get('app.routes'),
+    }
+    
+    return auth_application
+
+
+@pytest.fixture(scope="module") 
+def video_app(auth_app):
+    """Get video service app - loaded after auth with proper isolation"""
+    global _auth_modules_cache
+    
+    # Remove auth-service app modules to load video-service
+    for key in list(sys.modules.keys()):
+        if key.startswith('app.') or key == 'app':
+            del sys.modules[key]
+    
+    # Add video-service to path
+    video_path = Path(__file__).parent.parent / "video-service"  
+    sys.path.insert(0, str(video_path))
+    
+    # Import video app
+    from app import main as video_main
+    video_application = video_main.app
+    
+    # Store video modules
+    video_modules = {
+        'app': sys.modules.get('app'),
+        'app.main': sys.modules.get('app.main'),
+    }
+    
+    # Restore auth modules so auth_client fixture works
+    for key, module in _auth_modules_cache.items():
+        if module is not None:
+            sys.modules[key] = module
+    
+    return video_application
 
 
 @pytest.fixture
-def auth_client():
-    """Create HTTP client for auth service"""
-    return httpx.Client(base_url=AUTH_SERVICE_URL, timeout=10.0)
+def auth_client(auth_app):
+    """Create test client for auth service"""
+    return TestClient(auth_app)
 
 
 @pytest.fixture
-def video_client():
-    """Create HTTP client for video service"""
-    return httpx.Client(base_url=VIDEO_SERVICE_URL, timeout=10.0)
+def video_client(video_app):
+    """Create test client for video service"""
+    return TestClient(video_app)
 
 
 @pytest.fixture
 def auth_token(auth_client):
     """Create a test user and return auth token"""
+    username = f"testuser_{uuid.uuid4().hex[:8]}"
+    
     # Signup
-    auth_client.post(
+    signup_resp = auth_client.post(
         "/auth/signup",
-        json={"username": "videotest", "password": "pass123"}
+        json={"username": username, "password": "pass123"}
     )
+    if signup_resp.status_code not in [200, 400]:
+        raise AssertionError(f"Signup failed with {signup_resp.status_code}: {signup_resp.text}")
+    
     # Login to get token
-    response = auth_client.post(
+    login_resp = auth_client.post(
         "/auth/login",
-        json={"username": "videotest", "password": "pass123"}
+        json={"username": username, "password": "pass123"}
     )
-    return response.json()["access_token"]
+    if login_resp.status_code != 200:
+        raise AssertionError(f"Login failed with {login_resp.status_code}: {login_resp.text}")
+    
+    return login_resp.json()["access_token"]
 
 
 class TestVideoService:
@@ -55,7 +126,7 @@ class TestVideoService:
         
         # Create a fake video file
         video_content = b"fake mp4 video content here"
-        files = {"file": ("test.mp4", video_content, "video/mp4")}
+        files = [("files", ("test.mp4", video_content, "video/mp4"))]
         
         response = video_client.post(
             "/videos/upload",
@@ -71,7 +142,7 @@ class TestVideoService:
     def test_upload_without_auth(self, video_client):
         """Test upload without authentication token"""
         video_content = b"fake mp4 video content"
-        files = {"file": ("test.mp4", video_content, "video/mp4")}
+        files = [("files", ("test.mp4", video_content, "video/mp4"))]
         
         response = video_client.post(
             "/videos/upload",
@@ -85,7 +156,7 @@ class TestVideoService:
         headers = {"Authorization": f"Bearer {auth_token}"}
         
         # Unsupported format: .txt
-        files = {"file": ("test.txt", b"not a video", "text/plain")}
+        files = [("files", ("test.txt", b"not a video", "text/plain"))]
         
         response = video_client.post(
             "/videos/upload",
@@ -125,7 +196,7 @@ class TestVideoService:
         
         # Upload video
         video_content = b"fake mp4 video content"
-        files = {"file": ("test.mp4", video_content, "video/mp4")}
+        files = [("files", ("test.mp4", video_content, "video/mp4"))]
         
         upload_response = video_client.post(
             "/videos/upload",
@@ -172,11 +243,11 @@ class TestVideoService:
             zf.writestr("video.mp4", b"fake mp4 content")
         
         zip_buffer.seek(0)
-        files = {"file": ("video.zip", zip_buffer.read(), "application/zip")}
+        files = [("files", ("video.zip", zip_buffer.read(), "application/zip"))]
         
         response = video_client.post(
             "/videos/upload",
-            files={"file": files["file"]},
+            files=files,
             headers=headers
         )
         
@@ -194,11 +265,11 @@ class TestVideoService:
             zf.writestr("text.txt", b"just text")
         
         zip_buffer.seek(0)
-        files = {"file": ("no_video.zip", zip_buffer.read(), "application/zip")}
+        files = [("files", ("no_video.zip", zip_buffer.read(), "application/zip"))]
         
         response = video_client.post(
             "/videos/upload",
-            files={"file": files["file"]},
+            files=files,
             headers=headers
         )
         
