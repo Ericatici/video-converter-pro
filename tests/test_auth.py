@@ -5,8 +5,15 @@ Tests the auth-service endpoints using FastAPI TestClient
 import pytest
 import uuid
 import sys
+import os
 from pathlib import Path
 from fastapi.testclient import TestClient
+
+# Set up test environment BEFORE importing app
+os.environ["TESTING"] = "true"
+os.environ["DATABASE_URL"] = "sqlite:///test_auth.db"
+os.environ["REDIS_URL"] = "redis://localhost:6379"
+os.environ["SECRET_KEY"] = "test-secret-key"
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))

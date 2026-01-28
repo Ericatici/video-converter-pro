@@ -8,7 +8,14 @@ import zipfile
 import io
 import uuid
 import sys
+import os
 from pathlib import Path
+
+# Set up test environment BEFORE importing apps
+os.environ["TESTING"] = "true"
+os.environ["DATABASE_URL"] = "sqlite:///test_video.db"
+os.environ["REDIS_URL"] = "redis://localhost:6379"
+os.environ["SECRET_KEY"] = "test-secret-key"
 
 # Cache for auth modules to restore after loading video app
 _auth_modules_cache = {}
@@ -102,10 +109,14 @@ def auth_token(auth_client):
     if login_resp.status_code != 200:
         raise AssertionError(f"Login failed with {login_resp.status_code}: {login_resp.text}")
     
+<<<<<<< HEAD
+    return login_resp.json()["access_token"]
+=======
     data = login_resp.json()
     if "access_token" not in data:
         raise AssertionError(f"No access_token in response: {data}")
     return data["access_token"]
+>>>>>>> origin/main
 
 
 class TestVideoService:
