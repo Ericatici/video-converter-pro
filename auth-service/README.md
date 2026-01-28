@@ -3,7 +3,7 @@
 Authentication microservice for the Video Converter platform.
 
 ## Overview
-Build status: Docker permissions - Testing with GitHub repo settings update
+Build status: All CI/CD workflows passing with GHCR_TOKEN PAT ✅
 
 This service handles user registration, login, token verification, and authentication for the video processing pipeline.
 
