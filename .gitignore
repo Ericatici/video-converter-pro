@@ -9,4 +9,7 @@ venv/
 .env
 uploads/
 processed/
-*.log
+*.log.pytest_cache/
+test_*.db
+*.pyc
+__pycache__/

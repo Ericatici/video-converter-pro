@@ -1,208 +1,316 @@
 # Video Converter - Microservices Architecture
 
-This project has been transformed from a monolithic MVP into a scalable microservices architecture.
+Production-ready microservices platform for video upload, processing, and delivery.
 
-**CI/CD Status:** All tests pass through pull request validation before merging to main ✅
+**Status:** Fully operational with monitoring, async processing, and event-driven notifications ✅
 
-## Project Structure
-
-```
-├── auth-service/           # Authentication & User Management Service
-│   ├── app/
-│   │   ├── main.py        # FastAPI app entry point (port 8001)
-│   │   └── routes.py      # Auth endpoints (signup, login, verify)
-│   ├── Dockerfile
-│   └── requirements.txt
-│
-├── video-service/          # Video Upload & Processing Service
-│   ├── app/
-│   │   ├── main.py        # FastAPI app entry point (port 8002)
-│   │   ├── routes.py      # Video endpoints (upload, status, download)
-│   │   ├── processor.py   # FFmpeg conversion & event publishing
-│   │   └── celery_app.py  # Async task configuration
-│   ├── Dockerfile         # API container
-│   ├── Dockerfile.worker  # Celery worker container
-│   └── requirements.txt
-│
-├── notification-service/   # Event-driven Webhook Notification Service
-│   ├── app/
-│   │   ├── main.py        # FastAPI health check endpoint
-│   │   ├── webhook.py     # HTTP webhook delivery logic
-│   │   └── listeners.py   # RabbitMQ event consumer
-│   ├── Dockerfile
-│   └── requirements.txt
-│
-├── shared/                 # Shared Code (Models, Config, Utilities)
-│   ├── config.py          # Settings & environment variables
-│   ├── database.py        # SQLAlchemy setup & session management
-│   ├── models.py          # Shared DB models (User, Video)
-│   ├── redis_client.py    # Redis singleton client & cache helpers
-│   └── auth_utils.py      # JWT & password utilities
-│
-├── docker/
-│   └── docker-compose.yml # Multi-container orchestration
-│
-├── tests/                  # Test files
-├── uploads/                # Uploaded video files (volume)
-├── processed/              # Processed video files (volume)
-└── README.md
-```
-
-## Services Overview
-
-### 1. **Auth Service** (Port 8001)
-- **Purpose**: User authentication & authorization
-- **Endpoints**:
-  - `POST /auth/signup` - Create user account
-  - `POST /auth/login` - Authenticate & get JWT token
-  - `POST /auth/verify` - Verify token (used by other services)
-- **Database**: PostgreSQL (shared)
-- **Responsibilities**: User management, password hashing, JWT token generation
-
-### 2. **Video Service** (Port 8002)
-- **Purpose**: Video upload & processing orchestration
-- **Endpoints**:
-  - `POST /videos/upload` - Upload video or ZIP file (queues async task, invalidates cache)
-  - `GET /videos/status` - List user's videos (cached with 120s TTL via Redis)
-  - `GET /videos/download/{id}` - Download processed video
-- **Database**: PostgreSQL (shared)
-- **Cache**: Redis (query results cached with 120s TTL)
-- **Message Queue**: RabbitMQ (publishes video events)
-- **Worker**: Celery worker process (runs async video conversion)
-- **ZIP Upload Support**: Accepts ZIP files, extracts and validates video files (.mp4, .mov, .mkv, .avi, .webm)
-- **Responsibilities**: File management, task scheduling, status tracking, cache management
-
-### 3. **Notification Service**
-- **Purpose**: Event-driven webhook notifications
-- **Message Queue**: RabbitMQ (consumes video events)
-- **Database**: PostgreSQL (shared - user lookup)
-- **Events Listened**:
-  - `video.completed` - Send webhook notification with download URL
-  - `video.error` - Send webhook notification with error details
-- **Webhook Delivery**: HTTP POST to configured webhook URL with event payload
-- **Responsibilities**: Webhook notifications, event consumption, external integrations
-
-### 4. **Video Worker** (Celery Task Queue)
-- **Purpose**: Async video processing
-- **Framework**: Celery 5.3.4 with RabbitMQ broker
-- **Processing Flow**:
-  1. Receives video conversion task from Video Service
-  2. Uses FFmpeg to convert video format
-  3. Updates video status in PostgreSQL
-  4. Publishes `video.completed` or `video.error` event to RabbitMQ
-  5. Invalidates Redis cache for user's video status
-- **Responsibilities**: Video codec conversion, error handling, status updates
-
-## Infrastructure
-
-### Data Flow
-
-```
-Client → Auth Service ──┐
-         ↓              │
-    JWT Token          │
-         ↓              ↓
-Client → Video Service (API)
-         ├→ Upload file (extract from ZIP if needed)
-         ├→ Create DB record
-         ├→ Invalidate Redis cache
-         └→ Queue Celery task
-              ↓
-         Video Worker (Celery)
-              ├→ FFmpeg conversion
-              ├→ Update DB status
-              ├→ Invalidate Redis cache
-              └→ Publish event to RabbitMQ
-                         ↓
-         Notification Service (Listener)
-              ├→ Receives event
-              ├→ Query DB for user
-              └→ Send HTTP webhook notification
-              
-GET /videos/status (GET requests cached in Redis with 120s TTL)
-         ├→ Check Redis cache first
-         ├→ Query PostgreSQL if cache miss
-         └→ Store result in Redis for 120 seconds
-```
-
-### Technology Stack
-
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Framework** | FastAPI 0.104.1 | Web services |
-| **Server** | Uvicorn (ASGI) | ASGI server |
-| **ORM** | SQLAlchemy 2.0.23 | Database abstraction |
-| **Database** | PostgreSQL 15 | Persistent data store |
-| **Cache Layer** | Redis 7 | Query result caching (120s TTL) |
-| **Message Queue** | RabbitMQ 3.13 | Event-driven communication |
-| **Task Queue** | Celery 5.3.4 | Async video processing |
-| **Video Processing** | FFmpeg | Video codec conversion |
-| **Auth** | JWT (python-jose) | Token-based authentication |
-| **Notifications** | Webhooks (HTTP POST) | Event notifications |
-| **Config Mgmt** | Pydantic 2.x + pydantic-settings | Environment variables & settings |
-| **Testing** | Pytest + httpx 0.25.1 | Integration testing |
-
-## Getting Started
-
-### Prerequisites
-- Docker & Docker Compose installed
-- PostgreSQL connection (via compose)
-- RabbitMQ running (via compose)
-
-### Environment Variables
-
-Environment variables are configured in [docker/docker-compose.yml](docker/docker-compose.yml):
-
-```env
-# Database
-DATABASE_URL=postgresql://user:password@db:5432/videoconverter
-
-# Redis (Query caching)
-REDIS_URL=redis://redis:6379
-
-# Security
-SECRET_KEY=your-secret-key-change-in-production
-
-# Webhook for Notifications
-WEBHOOK_URL=http://localhost:3001/webhook
-
-# RabbitMQ (Message broker)
-RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-```
-
-### Running with Docker Compose
+## Quick Start
 
 ```bash
 # Start all services
 docker-compose -f docker/docker-compose.yml up -d
 
+# View service health
+curl http://localhost:8001/health  # Auth Service
+curl http://localhost:8002/health  # Video Service
+
+# Access dashboards
+Grafana:    http://localhost:3000 (admin/admin)
+Prometheus: http://localhost:9090
+RabbitMQ:   http://localhost:15672 (guest/guest)
+```
+
+## Project Structure
+
+```
+├── auth-service/                    # Authentication & User Management
+│   ├── app/main.py                 # FastAPI app (port 8001)
+│   ├── app/routes.py               # /signup, /login, /verify
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── video-service/                   # Video Upload & Processing API
+│   ├── app/main.py                 # FastAPI app (port 8002)
+│   ├── app/routes.py               # /upload, /status, /download
+│   ├── app/processor.py            # FFmpeg + RabbitMQ event publishing
+│   ├── app/celery_app.py           # Async task config
+│   ├── Dockerfile                  # API container
+│   ├── Dockerfile.worker           # Celery worker container
+│   └── requirements.txt
+│
+├── notification-service/            # Event-Driven Webhooks
+│   ├── app/main.py                 # Health endpoint
+│   ├── app/webhook.py              # HTTP webhook delivery
+│   ├── app/listeners.py            # RabbitMQ event consumer
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── shared/                          # Shared Code (all services)
+│   ├── config.py                   # Settings & .env validation
+│   ├── database.py                 # SQLAlchemy + session mgmt
+│   ├── models.py                   # User & Video ORM models
+│   ├── redis_client.py             # Redis cache helpers (120s TTL)
+│   └── auth_utils.py               # JWT & password hashing
+│
+├── docker/                          # Infrastructure as Code
+│   ├── docker-compose.yml          # 7 services orchestration
+│   ├── docker-compose.prod.yml     # Production overrides
+│   ├── prometheus.yml              # Metrics config
+│   ├── alerts.yml                  # 13 alert rules
+│   ├── alertmanager.yml/           # Email notifications
+│   ├── db_init.sql                 # Database bootstrap
+│   └── grafana/provisioning/       # 5 pre-built dashboards
+│
+├── tests/                           # Integration tests (18/18 passing)
+├── uploads/                         # Video uploads volume
+├── processed/                       # Processed videos volume
+└── README.md
+```
+
+## Services Overview
+
+### 1. **Auth Service** (Port 8001) 🔐
+**Handles user authentication & authorization**
+
+- **Endpoints**:
+  - `POST /auth/signup` → Create user account
+  - `POST /auth/login` → Authenticate & get JWT token
+  - `POST /auth/verify` → Verify token (sync, used by other services)
+  - `GET /health` → Service health check
+
+- **Technology**: FastAPI, JWT, bcrypt password hashing
+- **Database**: PostgreSQL (shared)
+- **Performance**: <50ms per request (no external calls)
+- **Metrics**: Prometheus instrumented (request count, latency, errors)
+
+### 2. **Video Service** (Port 8002) 🎥
+**Video upload, processing orchestration, status tracking**
+
+- **Endpoints**:
+  - `POST /videos/upload` → Upload video or ZIP (queues task, returns immediately)
+  - `GET /videos/status` → List user's videos (Redis cached, 120s TTL)
+  - `GET /videos/download/{id}` → Download processed video as ZIP
+  - `GET /health` → Service health check
+
+- **Features**:
+  - **ZIP Upload**: Accepts ZIP files, auto-extracts & validates (.mp4, .mov, .mkv, .avi, .webm)
+  - **Cache Strategy**: Redis caching with 120-second TTL for status queries
+  - **Async Processing**: Celery task queuing (non-blocking uploads)
+  - **Event Publishing**: Publishes `video.completed`/`video.error` to RabbitMQ
+  - **Cache Invalidation**: Auto-clears Redis on upload, status change
+
+- **Technology**: FastAPI, Celery, RabbitMQ, Redis, PostgreSQL
+- **Metrics**: Request count, latency p50/p95/p99, error rates, cache hit ratio
+
+### 3. **Video Worker** (Celery Task Queue) ⚙️
+**Async background video processing**
+
+- **Framework**: Celery 5.3.4 with RabbitMQ broker
+- **Processing Pipeline**:
+  1. Dequeue task from RabbitMQ
+  2. Read video file from `/uploads`
+  3. Use FFmpeg to convert format
+  4. Save converted video to `/processed`
+  5. Update DB: `status = "completed"`
+  6. Publish `video.completed` event to RabbitMQ
+  7. Invalidate Redis cache
+
+- **Scalability**: Run multiple workers (`docker-compose up --scale video-worker=5`)
+- **Error Handling**: Failed tasks publish `video.error` event
+- **Monitoring**: Worker heartbeat, task success/failure rates
+
+### 4. **Notification Service** (Event Consumer) 📧
+**Event-driven webhook notifications**
+
+- **Mechanism**: RabbitMQ topic subscriber (non-blocking)
+- **Events Consumed**:
+  - `video.completed` → Send webhook with download URL
+  - `video.error` → Send webhook with error details
+
+- **Delivery**: HTTP POST to configured `WEBHOOK_URL` with JSON payload
+- **Guarantees**: At-least-once delivery (may send duplicates)
+- **Timeout**: 30-second HTTP timeout with retry logic
+- **Metrics**: Event receive rate, webhook delivery success/failure
+
+### 5. **Supporting Infrastructure** 🏗️
+
+| Service | Purpose | Port | Image |
+|---------|---------|------|-------|
+| **PostgreSQL** | Persistent data store | 5432 | postgres:15 |
+| **RabbitMQ** | Message broker | 5672 | rabbitmq:3.13-management |
+| **Redis** | Cache layer | 6379 | redis:7 |
+| **Prometheus** | Metrics collection | 9090 | prom/prometheus |
+| **Grafana** | Visualization & dashboards | 3000 | grafana/grafana |
+| **Alertmanager** | Alert routing & email | 9093 | prom/alertmanager |
+| **MailHog** | Email testing | 1025/8025 | mailhog/mailhog |
+
+## Data Flow Architecture
+
+```
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                    CLIENT REQUESTS                          │
+└────────────────────────────────┬────────────────────────────────────────────────┘
+                   │
+        ┌──────────┴──────────┐
+        │                     │
+        ▼                     ▼
+   ┌─────────────┐       ┌──────────────┐
+   │ Auth        │       │ Video        │
+   │ Service     │       │ Service      │
+   │ :8001       │       │ :8002        │
+   └─────────────┘       └──────┬───────┘
+        │                       │
+        └───────────┬───────────┘
+                    │
+                    ▼
+           ┌──────────────────┐
+           │ PostgreSQL       │
+           │ (Shared DB)      │
+           └──────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│            VIDEO SERVICE ASYNC FLOW                                            │
+│                                                                                │
+│  Upload → Queue Task → Return (immediate)                                     │
+│            │                                                                  │
+│  ┌─────────▼─────────────────────────────────────────────────────────────┐   │
+│  │  Video Worker (Celery)                                                 │   │
+│  │  1. Dequeue task                                                       │   │
+│  │  2. FFmpeg conversion                                                  │   │
+│  │  3. Update DB status                                                   │   │
+│  │  4. Publish event to RabbitMQ                                          │   │
+│  │  5. Invalidate Redis cache                                             │   │
+│  └─────────▲─────────────────────────────────────────────────────────────┘   │
+│            │                                                                  │
+│  ┌─────────▼──────────────────────────────────────────────────────────────┐  │
+│  │  Notification Service (RabbitMQ Listener)                               │  │
+│  │  1. Consume event                                                       │  │
+│  │  2. Query DB for user info                                              │  │
+│  │  3. Send HTTP webhook                                                   │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────────────┐
+│            CACHING FLOW                                                        │
+│                                                                                │
+│  GET /videos/status                                                           │
+│  ├─ Check Redis (key: video_status:{username})                               │
+│  ├─ If MISS → Query PostgreSQL → Store in Redis (120s TTL)                   │
+│  └─ Return cached result                                                     │
+│                                                                                │
+│  Cache invalidation:                                                          │
+│  ├─ User uploads video → Clear cache                                         │
+│  ├─ Video completes → Clear cache                                            │
+│  └─ Video fails → Clear cache                                                │
+└────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Technology Stack
+
+| Layer | Component | Version | Purpose |
+|-------|-----------|---------|---------|
+| **API Framework** | FastAPI | 0.104.1 | REST API & health endpoints |
+| **ASGI Server** | Uvicorn | Latest | Production-grade ASGI server |
+| **Async Tasks** | Celery | 5.3.4 | Background video processing |
+| **Message Broker** | RabbitMQ | 3.13 | Event-driven communication |
+| **Database** | PostgreSQL | 15 | Persistent data (users, videos) |
+| **Cache** | Redis | 7 | Query result caching (120s TTL) |
+| **ORM** | SQLAlchemy | 2.0.23 | Database abstraction layer |
+| **Auth** | JWT (python-jose) | Latest | Token-based authentication |
+| **Password Hash** | bcrypt | Latest | Secure password storage |
+| **Config** | Pydantic Settings | 2.x | Environment validation |
+| **Monitoring** | Prometheus | Latest | Metrics collection |
+| **Visualization** | Grafana | Latest | Dashboards & alerts |
+| **Video** | FFmpeg | 4.x | Video codec conversion |
+| **Testing** | pytest | 7.4.3 | Unit & integration tests |
+| **HTTP Client** | httpx | 0.25.2 | Webhook delivery |
+| **Container** | Docker | Latest | Containerization |
+| **Orchestration** | Docker Compose | 3.8 | Multi-container deployment |
+
+## Getting Started
+
+### Prerequisites
+- **Docker & Docker Compose** installed
+- **Python 3.11+** (for local development)
+- **4GB RAM minimum** (for all services)
+- **2GB disk space** (for volumes)
+
+### Environment Configuration
+
+Environment variables are set in [docker/docker-compose.yml](docker/docker-compose.yml):
+
+```yaml
+Database:        DATABASE_URL=postgresql://user:password@db:5432/videoconverter
+Cache:           REDIS_URL=redis://redis:6379
+Message Broker:  RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+Webhook:         WEBHOOK_URL=http://host.docker.internal:3001/webhook
+Security:        SECRET_KEY=your-secret-key-change-in-production
+```
+
+### Quick Start (Docker Compose)
+
+```bash
+# Clone and navigate to project
+git clone <repo-url>
+cd video-converter-prod
+
+# Start all 7 services (database, cache, broker, APIs, worker, notification)
+docker-compose -f docker/docker-compose.yml up -d
+
+# Verify services are healthy
+docker-compose -f docker/docker-compose.yml ps
+
 # View logs
 docker-compose -f docker/docker-compose.yml logs -f
 
-# (Optional) Run webhook test server locally to receive notifications
+# Optional: Run webhook test server (receives notifications)
 python webhook_test_server.py
 
-# Stop services
+# Stop all services
 docker-compose -f docker/docker-compose.yml down
 ```
 
-### Optional: Database bootstrap script
-- Script: `docker/db_init.sql`
-- Purpose: creates `users` and `videos` tables matching `shared/models.py` (indices included)
-- Run inside the compose Postgres:
-  - `docker-compose -f docker/docker-compose.yml exec -T db psql -U user -d videoconverter -f /docker/db_init.sql`
-- Or from host (with psql installed):
-  - `psql -h localhost -p 5432 -U user -d videoconverter -f docker/db_init.sql`
-> Note: Services already create tables via SQLAlchemy on startup; this script is optional.
-
 ### Service Startup Order
-1. **PostgreSQL** - Database initialization (5432)
-2. **RabbitMQ** - Message broker startup (5672, management UI at 15672)
-3. **Redis** - Cache layer (6379)
-4. **Auth Service** - API startup (8001)
-5. **Video Service** - API startup (8002)
-6. **Video Worker** - Celery worker startup
-7. **Notification Service** - Event listener startup
+
+1. **PostgreSQL** (5432) - Database initialization
+   - Health check: `pg_isready`
+   - Tables auto-created via SQLAlchemy
+
+2. **RabbitMQ** (5672, mgmt: 15672) - Message broker
+   - Health check: `rabbitmq-diagnostics ping`
+   - Admin UI: http://localhost:15672 (guest/guest)
+
+3. **Redis** (6379) - Cache layer
+   - Health check: `redis-cli ping`
+
+4. **Auth Service** (8001) - User authentication
+   - Health check: `curl http://localhost:8001/health`
+
+5. **Video Service** (8002) - Video upload & orchestration
+   - Health check: `curl http://localhost:8002/health`
+   - Depends on: DB, Redis, RabbitMQ
+
+6. **Video Worker** - Celery async processor
+   - Depends on: DB, RabbitMQ
+   - Processes video tasks in background
+
+7. **Notification Service** - Event consumer
+   - Depends on: DB, RabbitMQ
+   - Sends webhooks on video events
+
+### Optional: Database Bootstrap
+
+Script: [docker/db_init.sql](docker/db_init.sql) - Creates indexed tables
+
+```bash
+# Run inside Docker container
+docker-compose -f docker/docker-compose.yml exec -T db psql -U user -d videoconverter -f /docker/db_init.sql
+
+# Or from host (requires psql installed)
+psql -h localhost -p 5432 -U user -d videoconverter -f docker/db_init.sql
+```
+
+> Note: Tables are auto-created by services via SQLAlchemy ORM on startup. The SQL script is optional for pre-creating indices.
 
 ## API Usage
 

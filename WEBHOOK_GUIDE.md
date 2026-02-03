@@ -1,70 +1,106 @@
 # Webhook Integration Guide
 
-This document explains how to integrate with the video processing webhook notifications.
+Integrate with video processing events via HTTP webhooks. The notification service publishes events to your webhook endpoint whenever videos are processed.
 
-## Overview
+## Configuration
 
-The notification service sends HTTP POST requests to your configured webhook URL whenever video processing events occur.
+### Set Webhook URL
 
-## Webhook Configuration
+Configure in [docker/docker-compose.yml](docker/docker-compose.yml):
 
-Set your webhook URL in the `.env` file:
-
-```env
-WEBHOOK_URL=http://your-domain.com/webhook
+```yaml
+environment:
+  WEBHOOK_URL=http://your-webhook-receiver.com/videos/webhook
 ```
 
-For local development:
-```env
-WEBHOOK_URL=http://localhost:3000/webhook
+### Local Development
+
+```bash
+# Option 1: Use test server (provided)
+python webhook_test_server.py
+# Listens on http://localhost:3001/webhook
+
+# Option 2: Use ngrok for public URL
+ngrok http 3000
+# WEBHOOK_URL=https://abc123.ngrok.io/webhook
+
+# Option 3: Docker internal network
+# WEBHOOK_URL=http://host.docker.internal:3000/webhook
 ```
 
-For Docker (accessing host machine from container):
-```env
-WEBHOOK_URL=http://host.docker.internal:3000/webhook
+### Production Deployment
+
+```yaml
+environment:
+  WEBHOOK_URL=https://api.myapp.com/webhooks/videos
 ```
 
 ## Event Types
 
-### 1. Video Completed (`video.completed`)
+### 1. Video Completed (`video.completed`) ✅
 
-Triggered when a video is successfully processed.
+Published when a video is successfully processed.
 
-**Payload Example:**
+**When it fires:**
+- FFmpeg conversion finishes successfully
+- Video saved to `/processed`
+- DB status updated to `"completed"`
+- Webhook sent to your endpoint
+
+**Payload:**
 ```json
 {
   "event": "video.completed",
-  "timestamp": "2026-01-16T10:30:00",
+  "timestamp": "2026-01-16T10:30:00Z",
   "data": {
     "user_id": 123,
-    "username": "testuser",
+    "username": "john_doe",
     "video_id": 456,
     "video_filename": "myvideo.mp4",
     "status": "completed",
-    "download_url": "/videos/download/456"
+    "download_url": "http://localhost:8002/videos/download/456"
   }
 }
 ```
 
-### 2. Video Error (`video.error`)
+**Common Actions:**
+- Send user email: "Your video is ready!"
+- Update dashboard: Mark video as complete
+- Trigger downstream processing
+- Send push notification
 
-Triggered when video processing fails.
+### 2. Video Error (`video.error`) ❌
 
-**Payload Example:**
+Published when video processing fails.
+
+**When it fires:**
+- FFmpeg encounters unsupported format
+- Disk write fails
+- Task times out
+- Worker crashes
+- DB update fails
+
+**Payload:**
 ```json
 {
   "event": "video.error",
-  "timestamp": "2026-01-16T10:30:00",
+  "timestamp": "2026-01-16T10:30:00Z",
   "data": {
     "user_id": 123,
-    "username": "testuser",
+    "username": "john_doe",
     "video_id": 456,
     "video_filename": "myvideo.mp4",
-    "error": "FFmpeg conversion failed: Invalid codec",
-    "status": "error"
+    "status": "error",
+    "error": "FFmpeg conversion failed: Unknown format 'xyz'"
   }
 }
 ```
+
+**Common Actions:**
+- Send error alert email
+- Log error to monitoring system
+- Trigger retry or manual review
+- Update user dashboard: "Processing failed"
 
 ## Webhook Endpoint Requirements
 
